@@ -65,3 +65,30 @@ def reshape_data(rows):
 # RET: filtered_data (list)
 def filter_data(data, region, year):
     return list(filter(lambda d: d["region"] == region and d["year"] == year, data))
+
+
+###############################################################################
+# Computation Function
+#
+# This function calculates the required statistic on the required chunk of data
+# Supported operations are:
+#       1. average
+#       2. sum
+#
+# ARG: data (list), operation (str)
+# RET: result (int)
+def compute_stat(data, operation):
+    # obtain the gdp field from data chunk
+    values = list(map(lambda d: d["gdp"], data))
+    # Handle 'not found' error
+    if not values:
+        return None
+
+    # Computational part
+    if operation == "average":
+        return sum(values) / len(values)
+    elif operation == "sum":
+        return sum(values)
+    # Handle 'incorrect operation error'
+    else:
+        raise ValueError("Invalid operation (must be 'average' or 'sum')")
