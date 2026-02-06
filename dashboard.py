@@ -59,6 +59,24 @@ def show_dashboard(config, filtered_data, result):
     # Print result of computation according to user's config.json
     print(f"Result    : {result:,.2f}\n")
 
+    # Get the variables ready for putting into plots
+    countries = list(map(lambda d: d["country"], filtered_data))
+    gdps = list(map(lambda d: d["gdp"], filtered_data))
+
+    # Bar Chart
+    plt.figure()
+    plt.bar(countries, gdps)
+    plt.title("GDP by Country")
+    plt.xlabel("Country")
+    plt.ylabel("GDP")
+    plt.xticks(rotation=90)
+    # Pie Chart
+    plt.figure()
+    plt.pie(gdps, labels=countries, autopct="%1.1f%%")
+    plt.title("GDP Distribution")
+    # Print the prepared charts
+    plt.show()
+
 
 ###############################################################################
 # Main - Entry point
@@ -88,3 +106,9 @@ def main():
     except Exception as e:
         print("ERROR:", e)
 
+
+#######
+# Run #
+#######
+if __name__ == "__main__":
+    main()
