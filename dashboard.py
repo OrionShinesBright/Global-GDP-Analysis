@@ -58,3 +58,33 @@ def show_dashboard(config, filtered_data, result):
         return
     # Print result of computation according to user's config.json
     print(f"Result    : {result:,.2f}\n")
+
+
+###############################################################################
+# Main - Entry point
+#
+# Is the logical controller for the entire program
+#
+def main():
+    try:
+        # 0.    FETCH
+        config = load_config()
+
+        # 1.    LOAD
+        raw_data = load_gdp_data(DATA_FILE)
+
+        # 2(a). SANITIZE
+        reshaped = reshape_data(raw_data)
+
+        # 2(b). FILTER
+        filtered = filter_data(reshaped, config["region"], config["year"])
+
+        # 3.    COMPUTE
+        result = compute_stat(filtered, config["operation"])
+
+        # 4.    VISUALIZE
+        show_dashboard(config, filtered, result)
+
+    except Exception as e:
+        print("ERROR:", e)
+
