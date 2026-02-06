@@ -37,3 +37,24 @@ def load_config():
         return json.load(f)
 
 
+###############################################################################
+# Dashboard Presentation Function
+#
+# Visualizes the processed computations
+# Very primitive dashboard
+#
+# ARG: config (list), filtered_data (list), result (int)
+# RET: json stream
+def show_dashboard(config, filtered_data, result):
+    # dashboard visualization (TUI based)
+    print("\n===== GDP ANALYSIS DASHBOARD =====")
+    print(f"Region    : {config['region']}")
+    print(f"Year      : {config['year']}")
+    print(f"Operation : {config['operation']}")
+    print("---------------------------------")
+    # Handle 'not found' error
+    if result is None:
+        print("No data available for this configuration.")
+        return
+    # Print result of computation according to user's config.json
+    print(f"Result    : {result:,.2f}\n")
