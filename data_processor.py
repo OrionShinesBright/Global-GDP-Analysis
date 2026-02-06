@@ -40,3 +40,28 @@ def expand_row(row):
         )
     )
 
+
+###############################################################################
+# Data Realignment Function
+#
+# Convert wide-year columns into:
+# Country | Region | Year | GDP
+#
+# ARG: rows (list)
+# RET: rows (list)
+def reshape_data(rows):
+    return [item for row in rows for item in expand_row(row)]
+
+
+###############################################################################
+# Filtration Function
+#
+# This function creates a subset of the dataset that only contains
+# the modified rows that we require, i.e:
+#       1. Region
+#       2. Year
+#
+# ARG: data (list), region (str), year (int)
+# RET: filtered_data (list)
+def filter_data(data, region, year):
+    return list(filter(lambda d: d["region"] == region and d["year"] == year, data))
