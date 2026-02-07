@@ -14,16 +14,69 @@
 
 # External Dependancies
 import json
-import matplotlib.pyplot as plt
+
+from InquirerPy import inquirer
+from InquirerPy.base.control import Choice
+from InquirerPy.separator import Separator
 
 # Internal Imports
 from data_loader import load_gdp_data
-from data_processor import is_country
-from data_processor import reshape_data, filter_data, compute_stat, split_by_type
+from data_processor import (
+        reshape_data,
+        filter_data,
+        compute_stat,
+        split_by_type,
+        is_country
+    )
+from chart_implementations import *
 
 # Defining the folder structure. Good for visual separation of data and code
 DATA_FILE = "data/gdp.csv"
 CONFIG_FILE = "config.json"
+
+
+###############################################################################
+# Prompt for the dashboard
+#
+# Displays a selectable menu after displaying initial dashboard
+#
+# ARG:
+# RET:
+def prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped):
+    action = inquirer.select(
+        message="Select an action:",
+        choices=[
+            "Bar Chart",
+            "Pie Chart",
+            "Line Plot",
+            "Lollipop Plot",
+            "Dot Plot",
+            "Tree Map",
+            "Word Cloud",
+            "Slope Chart",
+            Choice(value=None, name="Exit"),
+        ],
+        default=None,
+    ).execute()
+
+    # Map action names to functions
+    plot_actions = {
+        "Bar Chart":        lambda: bar_chart(names, gdps, data_scope),
+        "Pie Chart":        lambda: pie_chart(names, gdps, data_scope),
+        "Line Plot":        lambda: line_plot(years, yearly_gdp),
+        "Lollipop Plot":    lambda: lollipop_plot(names, gdps, config),
+        "Dot Plot":         lambda: dot_plot(names, gdps, config),
+        "Tree Map":         lambda: tree_map(year_slice, config),
+        "Word Cloud":       lambda: word_cloud(year_slice, config),
+        "Slope Chart":      lambda: slope_chart(config, reshaped, year_slice)
+    }
+
+    # Call the selected action
+    if action in plot_actions:
+        plot_actions[action]()  # call the function
+    else:
+        print(f"Unknown action: {action}")
+
 
 
 ###############################################################################
@@ -61,30 +114,9 @@ def show_dashboard(config, filtered_data, result, data_scope, reshaped):
     # Print result of computation according to user's config.json
     print(f"Result    : {result:,.2f}\n")
 
-    # Region-wise plots
     names = list(map(lambda d: d["name"], filtered_data))
     gdps = list(map(lambda d: d["gdp"], filtered_data))
 
-    # Bar Chart
-    plt.figure()
-    plt.bar(names, gdps)
-    plt.title(f"{data_scope} GDP Comparison")
-    plt.xlabel(data_scope)
-    plt.ylabel("GDP")
-    plt.xticks(rotation=90)
-
-    # Pie Chart
-    plt.figure()
-    plt.pie(
-        gdps,
-        labels=names,
-        autopct="%1.1f%%",
-        startangle=140
-    )
-    plt.title(f"{data_scope} GDP Distribution")
-    plt.tight_layout()
-
-    # Year-wise plots
     yearly_data = list(
         filter(
             lambda d:
@@ -108,110 +140,16 @@ def show_dashboard(config, filtered_data, result, data_scope, reshaped):
             years
         )
     )
-
-    # Line plot
-    plt.figure()
-    plt.plot(years, yearly_gdp)
-    plt.title("Year-wise GDP Trend")
-    plt.xlabel("Year")
-    plt.ylabel("GDP")
-
-    # Lollipop
-    plt.figure(figsize=(12,6))
-    plt.hlines(y=names, xmin=0, xmax=gdps, color='skyblue')
-    plt.plot(gdps, names, "o", color="orange")
-    plt.title(f"Country GDPs in {config['year']}")
-    plt.xlabel("GDP (Current US$)")
-    plt.ylabel("Country")
-    plt.tight_layout()
-
-    # dot plot + bubble plot
-    plt.figure(figsize=(12,6))
-    plt.scatter(names, gdps, color="green", s=50)  # s=size of marker
-    plt.title(f"Country GDPs in {config['year']}")
-    plt.xlabel("Country")
-    plt.ylabel("GDP (Current US$)")
-    plt.xticks(rotation=90)
-    plt.tight_layout()
-    sizes = [g/1e10 for g in gdps]  # scale down for marker size
-    plt.scatter(names, gdps, s=sizes, alpha=0.6)
-    plt.xticks(rotation=90)
-    plt.ylabel("GDP (Current US$)")
-    plt.title(f"Country GDPs in {config['year']}")
-    plt.tight_layout()
-
-
-    # treemap
-    import squarify
-    # Year-specific slice
     year_slice = list(
         filter(
             lambda d: d["year"] == config["year"] and d["type"] == "country",
             reshaped
         )
     )
-    countries = list(map(lambda d: d["name"], year_slice))
-    gdps = list(map(lambda d: d["gdp"], year_slice))
 
-    plt.figure(figsize=(12,8))
-    squarify.plot(
-        sizes=gdps,
-        label=countries,
-        alpha=0.8,
-        color=plt.cm.tab20.colors  # optional color palette
-    )
-    plt.title(f"Country GDP Treemap ({config['year']})")
-    plt.axis('off')
-    plt.tight_layout()
+    prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped)
 
-    # Wordcloud
-    from wordcloud import WordCloud
 
-    # Build dictionary: country → GDP
-    gdp_dict = {d["name"]: d["gdp"] for d in year_slice}
-
-    wordcloud = WordCloud(
-        width=1200,
-        height=600,
-        background_color='white',
-        colormap='tab20',
-        normalize_plurals=False
-    ).generate_from_frequencies(gdp_dict)
-
-    plt.figure(figsize=(15,8))
-    plt.imshow(wordcloud, interpolation='bilinear')
-    plt.axis('off')
-    plt.title(f"Country GDP Word Cloud ({config['year']})")
-
-    # Slope chart
-    # Pick previous year (if exists)
-    prev_year = config["year"] - 1
-    prev_slice = list(
-        filter(
-            lambda d: d["year"] == prev_year and d["type"] == "country" and d["name"] in countries,
-            reshaped
-        )
-    )
-    prev_gdp_dict = {d["name"]: d["gdp"] for d in prev_slice}
-    curr_gdp_dict = {d["name"]: d["gdp"] for d in year_slice}
-
-    plt.figure(figsize=(12,8))
-
-    for country in countries:
-        if country in prev_gdp_dict:
-            plt.plot([prev_year, config["year"]],
-                     [prev_gdp_dict[country], curr_gdp_dict[country]],
-                     marker='o', label=country)
-            
-    plt.xlabel("Year")
-    plt.ylabel("GDP (Current US$)")
-    plt.title(f"Slope Chart: GDP Change {prev_year} → {config['year']}")
-    plt.grid(True)
-    plt.tight_layout()
-
-        
-    # Print the prepared charts
-    plt.show()
 
 
 ###############################################################################
