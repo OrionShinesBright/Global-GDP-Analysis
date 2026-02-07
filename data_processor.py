@@ -11,6 +11,23 @@
 > Filters and aligns data from the given columns as required.
 """
 
+# To separately handle regions vs countries
+import pycountry
+
+###############################################################################
+# Country vs Region Checking Function
+#
+# Helper function to be used in separation of data
+#
+# ARG: name (str)
+# RET: is_country (bool)
+def is_country(name):
+    try:
+        pycountry.countries.lookup(name)
+        return True
+    except LookupError:
+        return False
+
 
 ###############################################################################
 # Row Consolidation Function - Called in reshape_data() for each row individually
@@ -25,15 +42,18 @@ def expand_row(row):
     # Holding names of dataset columns
     country = row["Country Name"]
     region = row["Continent"]
+    # Figuring out the type for the region
+    row_type = "country" if is_country(country) else "region"
     # Returning newly modified row as a list
     return list(
         map(
             # mapping
             lambda y: {
-                "country": country,
+                "name": country,
                 "region": region,
                 "year": int(y),
                 "gdp": float(row[y]),
+                "type": row_type,
             },
             # filtering + appending
             filter(lambda k: k.isdigit() and row[k] != "", row.keys()),
@@ -61,10 +81,31 @@ def reshape_data(rows):
 #       1. Region
 #       2. Year
 #
-# ARG: data (list), region (str), year (int)
+# ARG: data (list), region (str), year (int), row_type (str)
 # RET: filtered_data (list)
-def filter_data(data, region, year):
-    return list(filter(lambda d: d["region"] == region and d["year"] == year, data))
+def filter_data(data, target, year, row_type=None):
+    is_target_country = is_country(target)
+
+    return list(
+        filter(
+            lambda d:
+                (
+                    # Country-wise query
+                    (is_target_country and d["type"] == "country" and d["name"] == target)
+                    or
+                    # Region-wise query
+                    (not is_target_country and
+                     (
+                        (d["type"] == "region" and d["name"] == target) or
+                        (d["type"] == "country" and d["region"] == target)
+                     ))
+                )
+                and d["year"] == year
+                and (row_type is None or d["type"] == row_type),
+            data
+        )
+    )
+
 
 
 ###############################################################################
@@ -92,3 +133,17 @@ def compute_stat(data, operation):
     # Handle 'incorrect operation error'
     else:
         raise ValueError("Invalid operation (must be 'average' or 'sum')")
+
+###############################################################################
+# Split by region type
+#
+# Two types are acceptable:
+#    1. country
+#    2. region
+#
+# ARG: data (list)
+# RET: regions (list), countries (list)
+def split_by_type(data):
+    regions = list(filter(lambda d: d["type"] == "region", data))
+    countries = list(filter(lambda d: d["type"] == "country", data))
+    return regions, countries
