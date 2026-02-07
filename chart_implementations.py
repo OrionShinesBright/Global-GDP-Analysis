@@ -1,5 +1,27 @@
-import matplotlib.pyplot as plt
+# SDA - Project, Spring 2026
+#
+# Taha Tahir     [24L-0677]
+# Muhammad Rafay [24L-0649]
 
+"""
+> chart_implementations.py
+
+> Helper Module, to be called from the dashboard
+> Creates the graphs and charts, handles matplotlib internals.
+> Handles all visualizations modularly
+"""
+
+# Main Graphing Library
+import matplotlib.pyplot as plt
+# For tree_map graph type
+import squarify
+# For word_cloud graph type
+from wordcloud import WordCloud
+
+
+#
+# Bar chart - Region
+#
 def bar_chart(names, gdps, data_scope):
     plt.figure()
     plt.bar(names, gdps)
@@ -9,6 +31,10 @@ def bar_chart(names, gdps, data_scope):
     plt.xticks(rotation=90)
     plt.show()
 
+
+#
+# Pie Chart - Region
+#
 def pie_chart(names, gdps, data_scope):
     plt.figure()
     plt.pie(
@@ -21,6 +47,10 @@ def pie_chart(names, gdps, data_scope):
     plt.tight_layout()
     plt.show()
 
+
+#
+# Line Plot - Year
+#
 def line_plot(years, yearly_gdp):
     plt.figure()
     plt.plot(years, yearly_gdp)
@@ -29,6 +59,10 @@ def line_plot(years, yearly_gdp):
     plt.ylabel("GDP")
     plt.show()
 
+
+#
+# Lollipop Chart - Region
+#
 def lollipop_plot(names, gdps, config):
     plt.figure(figsize=(12,6))
     plt.hlines(y=names, xmin=0, xmax=gdps, color='skyblue')
@@ -39,7 +73,12 @@ def lollipop_plot(names, gdps, config):
     plt.tight_layout()
     plt.show()
 
+
+#
+# Dot + Bubble Plot - Region
+#
 def dot_plot(names, gdps, config):
+    # dot plot
     plt.figure(figsize=(12,6))
     plt.scatter(names, gdps, color="green", s=50)  # s=size of marker
     plt.title(f"Country GDPs in {config['year']}")
@@ -47,16 +86,21 @@ def dot_plot(names, gdps, config):
     plt.ylabel("GDP (Current US$)")
     plt.xticks(rotation=90)
     plt.tight_layout()
+    # bubble plot
     sizes = [g/1e10 for g in gdps]  # scale down for marker size
     plt.scatter(names, gdps, s=sizes, alpha=0.6)
     plt.xticks(rotation=90)
     plt.ylabel("GDP (Current US$)")
     plt.title(f"Country GDPs in {config['year']}")
     plt.tight_layout()
+    # merged automatically
     plt.show()
 
+
+#
+# Tree Map - Global
+#
 def tree_map(year_slice, config):
-    import squarify
     countries = list(map(lambda d: d["name"], year_slice))
     gdps = list(map(lambda d: d["gdp"], year_slice))
     plt.figure(figsize=(12,8))
@@ -71,8 +115,10 @@ def tree_map(year_slice, config):
     plt.tight_layout()
     plt.show()
 
+#
+# Word Cloud - Global
+#
 def word_cloud(year_slice, config):
-    from wordcloud import WordCloud
     gdp_dict = {d["name"]: d["gdp"] for d in year_slice}
     wordcloud = WordCloud(
         width=1200,
@@ -87,6 +133,10 @@ def word_cloud(year_slice, config):
     plt.title(f"Country GDP Word Cloud ({config['year']})")
     plt.show()
 
+
+#
+# Slope Chart - Year
+#
 def slope_chart(config, reshaped, year_slice):
     prev_year = config["year"] - 1
     countries = list(map(lambda d: d["name"], year_slice))
@@ -110,4 +160,3 @@ def slope_chart(config, reshaped, year_slice):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-
