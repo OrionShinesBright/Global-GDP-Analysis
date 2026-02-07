@@ -14,15 +14,69 @@
 
 # External Dependancies
 import json
-import matplotlib.pyplot as plt
+
+from InquirerPy import inquirer
+from InquirerPy.base.control import Choice
+from InquirerPy.separator import Separator
 
 # Internal Imports
 from data_loader import load_gdp_data
-from data_processor import reshape_data, filter_data, compute_stat
+from data_processor import (
+        reshape_data,
+        filter_data,
+        compute_stat,
+        split_by_type,
+        is_country
+    )
+from chart_implementations import *
 
 # Defining the folder structure. Good for visual separation of data and code
 DATA_FILE = "data/gdp.csv"
 CONFIG_FILE = "config.json"
+
+
+###############################################################################
+# Prompt for the dashboard
+#
+# Displays a selectable menu after displaying initial dashboard
+#
+# ARG:
+# RET:
+def prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped):
+    action = inquirer.select(
+        message="Select an action:",
+        choices=[
+            "Bar Chart",
+            "Pie Chart",
+            "Line Plot",
+            "Lollipop Plot",
+            "Dot Plot",
+            "Tree Map",
+            "Word Cloud",
+            "Slope Chart",
+            Choice(value=None, name="Exit"),
+        ],
+        default=None,
+    ).execute()
+
+    # Map action names to functions
+    plot_actions = {
+        "Bar Chart":        lambda: bar_chart(names, gdps, data_scope),
+        "Pie Chart":        lambda: pie_chart(names, gdps, data_scope),
+        "Line Plot":        lambda: line_plot(years, yearly_gdp),
+        "Lollipop Plot":    lambda: lollipop_plot(names, gdps, config),
+        "Dot Plot":         lambda: dot_plot(names, gdps, config),
+        "Tree Map":         lambda: tree_map(year_slice, config),
+        "Word Cloud":       lambda: word_cloud(year_slice, config),
+        "Slope Chart":      lambda: slope_chart(config, reshaped, year_slice)
+    }
+
+    # Call the selected action
+    if action in plot_actions:
+        plot_actions[action]()  # call the function
+    else:
+        print(f"Unknown action: {action}")
+
 
 
 ###############################################################################
@@ -45,9 +99,10 @@ def load_config():
 #
 # ARG: config (list), filtered_data (list), result (int)
 # RET: json stream
-def show_dashboard(config, filtered_data, result):
+def show_dashboard(config, filtered_data, result, data_scope, reshaped):
     # dashboard visualization (TUI based)
     print("\n===== GDP ANALYSIS DASHBOARD =====")
+    print(f"Scope     : {data_scope}")
     print(f"Region    : {config['region']}")
     print(f"Year      : {config['year']}")
     print(f"Operation : {config['operation']}")
@@ -59,23 +114,42 @@ def show_dashboard(config, filtered_data, result):
     # Print result of computation according to user's config.json
     print(f"Result    : {result:,.2f}\n")
 
-    # Get the variables ready for putting into plots
-    countries = list(map(lambda d: d["country"], filtered_data))
+    names = list(map(lambda d: d["name"], filtered_data))
     gdps = list(map(lambda d: d["gdp"], filtered_data))
 
-    # Bar Chart
-    plt.figure()
-    plt.bar(countries, gdps)
-    plt.title("GDP by Country")
-    plt.xlabel("Country")
-    plt.ylabel("GDP")
-    plt.xticks(rotation=90)
-    # Pie Chart
-    plt.figure()
-    plt.pie(gdps, labels=countries, autopct="%1.1f%%")
-    plt.title("GDP Distribution")
-    # Print the prepared charts
-    plt.show()
+    yearly_data = list(
+        filter(
+            lambda d:
+                d["type"] == "country"
+                and (
+                    d["region"] == config["region"]
+                    or d["name"] == config["region"]
+                ),
+            reshaped
+        )
+    )
+    years = sorted(set(map(lambda d: d["year"], yearly_data)))
+    yearly_gdp = list(
+        map(
+            lambda y: sum(
+                map(
+                    lambda d: d["gdp"],
+                    filter(lambda r: r["year"] == y, yearly_data)
+                )
+            ),
+            years
+        )
+    )
+    year_slice = list(
+        filter(
+            lambda d: d["year"] == config["year"] and d["type"] == "country",
+            reshaped
+        )
+    )
+
+    prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped)
+
+
 
 
 ###############################################################################
@@ -95,13 +169,23 @@ def main():
         reshaped = reshape_data(raw_data)
 
         # 2(b). FILTER
-        filtered = filter_data(reshaped, config["region"], config["year"])
+        target = config["region"]
+        year = config["year"]
 
-        # 3.    COMPUTE
+        if is_country(target):
+            filtered = filter_data(reshaped, target, year, row_type="country")
+            data_scope = "Country-wise"
+        else:
+            filtered = filter_data(reshaped, target, year)
+            data_scope = "Region-wise"
+
+        # 2. COMPUTE
         result = compute_stat(filtered, config["operation"])
+        active_data = filtered
+
 
         # 4.    VISUALIZE
-        show_dashboard(config, filtered, result)
+        show_dashboard(config, active_data, result, data_scope, reshaped)
 
     except Exception as e:
         print("ERROR:", e)
