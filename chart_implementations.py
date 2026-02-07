@@ -11,15 +11,28 @@ def bar_chart(names, gdps, data_scope):
 
 def pie_chart(names, gdps, data_scope):
     plt.figure()
-    plt.pie(
+    wedges, _, autotexts = plt.pie(
         gdps,
-        labels=names,
         autopct="%1.1f%%",
-        startangle=140
+        startangle=140,
+        pctdistance=0.8
+    )
+    # Hide percentage labels below threshold
+    for autotext in autotexts:
+        pct = float(autotext.get_text().replace('%', ''))
+        if pct < 2:
+            autotext.set_text("")
+    plt.legend(
+        wedges,
+        names,
+        title="Categories",
+        loc="center left",
+        bbox_to_anchor=(1, 0.5)
     )
     plt.title(f"{data_scope} GDP Distribution")
     plt.tight_layout()
     plt.show()
+
 
 def line_plot(years, yearly_gdp):
     plt.figure()
