@@ -1,6 +1,6 @@
 {
-  "region": "Europe",
-  "year": 2019,
-  "operation": "average",
+  "region": "Pakistan",
+  "year": 2020,
+  "operation": "sum",
   "output": "dashboard"
 }
