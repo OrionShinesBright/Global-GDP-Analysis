@@ -8,14 +8,13 @@
 
 > First logical part of the program
 > Obtains the dataset file, and loads the data in csv format
+> Also obtains config file in json format, and parses it.
 > Works independant of the Operating System
 """
 
-# built-in csv parser
+# External Dependancies
+import json
 import csv
-
-# built-in OS abstraction library.
-# using to access path in a cross-platform manner.
 import os
 
 
@@ -35,3 +34,16 @@ def load_gdp_data(filepath):
     with open(filepath, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         return list(reader)
+
+
+###############################################################################
+# Configuration Loader Function
+#
+# Handles the file descriptors, loads contents into memory after parsing as json
+#
+# ARG:
+# RET: json stream
+CONFIG_FILE = "config.json"     # default value
+def load_config():
+    with open(CONFIG_FILE) as f:
+        return json.load(f)
