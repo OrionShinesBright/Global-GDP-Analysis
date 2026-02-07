@@ -31,7 +31,7 @@ def bar_chart(names, gdps, data_scope):
     plt.ylim(0, max(gdps) * 1.25)
     plt.title(f"{data_scope} GDP Comparison")
     plt.xlabel(data_scope)
-    plt.ylabel("GDP")
+    plt.ylabel("GDP (Current US$ [in Billions])")
     plt.xticks(rotation=90, ha="right")
     plt.tight_layout()
     plt.show()
@@ -85,7 +85,7 @@ def line_plot(years, yearly_gdp):
     plt.plot(years, yearly_gdp, marker="o")
     plt.title("Year-wise GDP Trend")
     plt.xlabel("Year")
-    plt.ylabel("GDP")
+    plt.ylabel("GDP (Current US$ [in Billions])")
     plt.tight_layout()
     plt.show()
 
@@ -141,9 +141,9 @@ def tree_map(year_slice, config):
     countries = list(map(lambda d: d["name"], year_slice))
     gdps = list(map(lambda d: d["gdp"], year_slice))
 
-    # Only label countries contributing >1.5% of total GDP
+    # Only label countries contributing >1% of total GDP
     total = sum(gdps)
-    labels = [c if g/total > 0.015 else "" for c, g in zip(countries, gdps)]
+    labels = [c if g/total > 0.01 else "" for c, g in zip(countries, gdps)]
 
     plt.figure(figsize=(12,8))
     squarify.plot(
