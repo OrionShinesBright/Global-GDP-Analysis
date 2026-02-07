@@ -19,6 +19,8 @@ from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
 
+from itertools import repeat
+
 # Internal Imports
 from data_loader import load_gdp_data
 from data_processor import (
@@ -35,6 +37,13 @@ DATA_FILE = "data/gdp.csv"
 CONFIG_FILE = "config.json"
 
 
+def clear_screen():
+    try:
+        print("\033[2J\033[H", end="")
+    except:
+        import os
+        os.system("cls" if os.name == "nt" else "clear")
+
 ###############################################################################
 # Prompt for the dashboard
 #
@@ -46,15 +55,34 @@ def prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, 
     action = inquirer.select(
         message="Select an action:",
         choices=[
+            Separator(),
+            Separator("# Region-Wise GDP Plots:"),
+            Separator(),
+
             "Bar Chart",
             "Pie Chart",
-            "Line Plot",
-            "Lollipop Plot",
             "Dot Plot",
+            "Lollipop Plot",
+
+            Separator(),
+            Separator("# Year-Wise GDP Plots:"),
+            Separator(),
+
+            "Line Plot",
+            "Slope Chart",
+
+            Separator(),
+            Separator("# Extra GDP Plots:"),
+            Separator(),
+
             "Tree Map",
             "Word Cloud",
-            "Slope Chart",
-            Choice(value=None, name="Exit"),
+
+            Separator(),
+            Separator("# Exit:"),
+            Separator(),
+
+            "Exit"
         ],
         default=None,
     ).execute()
@@ -68,7 +96,8 @@ def prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, 
         "Dot Plot":         lambda: dot_plot(names, gdps, config),
         "Tree Map":         lambda: tree_map(year_slice, config),
         "Word Cloud":       lambda: word_cloud(year_slice, config),
-        "Slope Chart":      lambda: slope_chart(config, reshaped, year_slice)
+        "Slope Chart":      lambda: slope_chart(config, reshaped, year_slice),
+        "Exit":             lambda: exit_prompt()
     }
 
     # Call the selected action
@@ -90,16 +119,11 @@ def load_config():
     with open(CONFIG_FILE) as f:
         return json.load(f)
 
+def exit_prompt():
+    print("Dying, bye!")
+    exit(1)
 
-###############################################################################
-# Dashboard Presentation Function
-#
-# Visualizes the processed computations
-# Very primitive dashboard
-#
-# ARG: config (list), filtered_data (list), result (int)
-# RET: json stream
-def show_dashboard(config, filtered_data, result, data_scope, reshaped):
+def dashboard_info(data_scope, config, result):
     # dashboard visualization (TUI based)
     print("\n===== GDP ANALYSIS DASHBOARD =====")
     print(f"Scope     : {data_scope}")
@@ -114,9 +138,18 @@ def show_dashboard(config, filtered_data, result, data_scope, reshaped):
     # Print result of computation according to user's config.json
     print(f"Result    : {result:,.2f}\n")
 
+
+###############################################################################
+# Dashboard Presentation Function
+#
+# Visualizes the processed computations
+# Very primitive dashboard
+#
+# ARG: config (list), filtered_data (list), result (int)
+# RET: json stream
+def show_dashboard(config, filtered_data, result, data_scope, reshaped):
     names = list(map(lambda d: d["name"], filtered_data))
     gdps = list(map(lambda d: d["gdp"], filtered_data))
-
     yearly_data = list(
         filter(
             lambda d:
@@ -147,7 +180,12 @@ def show_dashboard(config, filtered_data, result, data_scope, reshaped):
         )
     )
 
-    prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped)
+    for _ in repeat(None):
+        clear_screen()
+        print("--------------------------------------------\n")
+        dashboard_info(data_scope, config, result)
+        print("--------------------------------------------\n")
+        prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped)
 
 
 
