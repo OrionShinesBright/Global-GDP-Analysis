@@ -32,6 +32,12 @@ Made for our SDA semester project, the major purpose of this project is to showc
 
 ### Clone this repository
 ``` bash
+# For ubuntu only:
+sudo apt install -y git
+
+# For Archlinux only:
+sudo pacman -S --needed git base-devel
+
 git clone https://github.com/OrionShinesBright/Global-GDP-Analysis/
 cd Global-GDP-Analysis/
 ```
@@ -44,7 +50,7 @@ yay -S python-squarify python-wordcloud python-inquirerpy
 ```
 **For Ubuntu**
 ```bash
-sudo apt install -y curl
+sudo apt install -y curl python-is-python3 python3
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 uv venv
