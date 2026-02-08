@@ -58,7 +58,11 @@ def dashboard_info(data_scope, config, result):
         print(f"\t\033[0;90m────────────────────────────────────────────────────")
         return
     # Print result of computation
-    print(f"\t\033[0;90m  \033[0;92mResult    \033[0;90m│\t\033[0;93m{result:,.2f}")
+    print(f"\t\033[0;90m  \033[0;92mResult    \033[0;90m│\t\033[0;93m{result:,.2f}", end = "")
+    if data_scope == "Country-wise":
+        print(f"(Single country stats are the GDP value itself)")
+    else:
+        print(f"")
     print(f"\t\033[0;90m────────────┴───────────────────────────────────────")
 
 
