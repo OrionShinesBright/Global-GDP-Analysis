@@ -48,7 +48,8 @@ sudo apt install -y curl
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 uv venv
-uv pip install matplotlib squarify wordcloud inquirerpy pycountry
+uv pip install squarify wordcloud inquirerpy pycountry
+sudo apt install -y python3-tk python3-matplotlib
 ```
 
 ### Run the Dashboard
