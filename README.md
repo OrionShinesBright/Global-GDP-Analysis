@@ -52,8 +52,13 @@ uv pip install matplotlib squarify wordcloud inquirerpy pycountry
 ```
 
 ### Run the Dashboard
+**For Arch Linux**
 ```bash
 python main.py
+```
+**For Ubuntu**
+```bash
+uv run main.py
 ```
 
 ---
