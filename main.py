@@ -9,25 +9,24 @@
 > Entry Point
 > Controller for all operations
 """
+import json
+from core.data_processor import TransformationEngine
+from plugins.input.data_loader import InputManager
+from plugins.output.protocols import OutputManager
 
-# Internal Dependancies
-from src.data_loader import (
-        load_gdp_data,
-        load_config
-    )
-from src.data_processor import (
-        reshape_data,
-        filter_data,
-        compute_stat,
-        split_by_type,
-        is_country
-    )
-from src.dashboard import (
-        show_dashboard
-    )
-# Dataset path
-DATA_FILE = "assets/World_Bank_Dataset.csv"
 
+CONFIG_FILE = "config.json"
+
+###############################################################################
+# Configuration Loader Function
+#
+# Handles the file descriptors, loads contents into memory after parsing as json
+#
+# ARG:
+# RET: json stream
+def load_config():
+    with open(CONFIG_FILE) as f:
+        return json.load(f)
 
 ###############################################################################
 # Main
@@ -36,42 +35,29 @@ DATA_FILE = "assets/World_Bank_Dataset.csv"
 #
 # ARG:
 # RET:
-def main():
+def bootstrap():
     try:
-        # 0.    FETCH
-        config = load_config()
+        #0. FETCH
+        config = load_config()  
+        
+        #1. output module
+        output_manager = OutputManager(config)
+        sink = output_manager.get_sink()
 
-        # 1.    LOAD
-        raw_data = load_gdp_data(DATA_FILE)
-
-        # 2(a). SANITIZE
-        reshaped = reshape_data(raw_data)
-
-        # 2(b). FILTER
-        target = config["region"]
-        year = config["year"]
-
-        if is_country(target):
-            filtered = filter_data(reshaped, target, year, row_type="country")
-            data_scope = "Country-wise"
-        else:
-            filtered = filter_data(reshaped, target, year)
-            data_scope = "Region-wise"
-
-        # 2. COMPUTE
-        result = compute_stat(filtered, config["operation"])
-        active_data = filtered
-
-
-        # 4.    VISUALIZE
-        show_dashboard(config, active_data, result, data_scope, reshaped)
-
+        #2. Core Engine
+        engine = TransformationEngine(config,sink)
+        
+        #3. Input
+        reader = InputManager(config,engine)
+        reader.run()
+        
     except Exception as e:
-        print("ERROR:", e)
+        import traceback
+        traceback.print_exc()
 
 
 #######
 # Run #
 #######
 if __name__ == "__main__":
-    main()
+    bootstrap()
