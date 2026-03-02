@@ -10,6 +10,11 @@ Made for our SDA semester project, the major purpose of this project is to showc
 
 ---
 
+## UML Diagram
+![Diagram Genned with Plantuml](plantuml_diagram_image.png)
+
+---
+
 ## Project Structure
 ```bash
 Global-GDP-Analysis/
@@ -40,15 +45,20 @@ Global-GDP-Analysis/
 
 ---
 
-## How to Run
+## Installation Instructions
+<details>
+  <summary>Cloning the Repository</summary>
 
-**Clone the Repository**
 ```bash
 git clone https://github.com/OrionShinesBright/Global-GDP-Analysis/
 cd Global-GDP-Analysis/
 ```
 
-**Get Dependencies**
+</details>
+
+<details>
+  <summary>Get Dependencies</summary>
+
 ```bash
 # For Archlinux
 sudo pacman -S --needed base-devel git python python-matplotlib python-pycountry
@@ -56,8 +66,11 @@ sudo pacman -S --needed base-devel git python python-matplotlib python-pycountry
 # For Ubuntu
 sudo apt install -y python3-tk python3-matplotlib git curl python-is-python3 python3
 ```
+</details>
 
-**Setup the Environment**
+<details>
+  <summary>Setup the V-Env</summary>
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
@@ -65,10 +78,16 @@ uv venv
 uv pip install squarify wordcloud inquirerpy pycountry
 ```
 
-**Run the Dashboard**
+</details>
+
+<details>
+  <summary>Run the Dashboard</summary>
+
 ```bash
 uv run main.py
 ```
+
+</details>
 
 ---
 
@@ -81,3 +100,4 @@ We have made use of the following external tools, to improve the smoothness of o
 4. [wordcloud](https://github.com/amueller/word_cloud) (for visualization of `wordcloud` graph variant)
 5. [InquirerPy](https://github.com/kazhala/InquirerPy) (for building the TUI used in dashboard prompt)
 6. [pycountry](https://github.com/pycountry/pycountry) (to identify between currently recognized countries of the world)
+7. [uv](https://github.com/astral-sh/uv.git) (to manage packages across different distributions of linux)
