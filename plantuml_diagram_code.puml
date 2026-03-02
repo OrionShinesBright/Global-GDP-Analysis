@@ -1,0 +1,145 @@
+@startuml GDP Analytics System
+
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+' ─────────────────────────────────────────
+' Protocols (Interfaces)
+' ─────────────────────────────────────────
+package "core.protocols" {
+    interface PipelineService <<Protocol>> {
+        + execute(raw_data: List[Any]) : None
+    }
+
+    interface DataSink <<Protocol>> {
+        + write(records: List[dict]) : None
+    }
+}
+
+' ─────────────────────────────────────────
+' Core
+' ─────────────────────────────────────────
+package "core" {
+    class TransformationEngine {
+        - config : Dict
+        - sink : DataSink
+        --
+        + __init__(config: Dict, sink: DataSink)
+        + execute(raw_data: List[Dict]) : None
+        - reshape_data(rows: List) : List
+        - filter_data(data, target, year, row_type) : List
+        - expand_row(row: Dict) : List
+        - is_country(name: str) : bool
+        - compute_stat(filtered, operation, reshaped, config) : Any
+    }
+
+    class OPERATIONS <<registry>> {
+        + average(cdict) : float
+        + sum(cdict) : float
+        + top_10(cdict) : List
+        + bottom_10(cdict) : List
+        + growth_rate(cdict) : List
+        + average_by_continent(cdict) : List
+        + global_gdp_trend(cdict) : List
+        + fastest_growing_continent(cdict) : str
+        + consistent_decline(cdict) : List
+        + continent_contribution(cdict) : List
+    }
+}
+
+' ─────────────────────────────────────────
+' Plugins – Input
+' ─────────────────────────────────────────
+package "plugins.input" {
+    class InputManager {
+        - config : Dict
+        - service : PipelineService
+        --
+        + __init__(config: Dict, service: PipelineService)
+        + run() : None
+        - load_gdp_data_csv(filepath: str) : List
+        - load_gdp_data_json(filepath: str) : List
+    }
+}
+
+' ─────────────────────────────────────────
+' Plugins – Output
+' ─────────────────────────────────────────
+package "plugins.output" {
+    class OutputManager {
+        - config : Dict
+        - sink : DataSink
+        --
+        + __init__(config: Dict)
+        - _choose_sink() : DataSink
+        + get_sink() : DataSink
+    }
+
+    class ConsoleWriter {
+        + write(records, config, filtered_data, reshaped_data) : None
+        - dashboard_info(result, config, data_scope) : None
+    }
+
+    class ChartWriter {
+        + write(records, config, filtered_data, reshaped_data) : None
+    }
+
+    class Dashboard {
+        + show_dashboard(config, filtered_data, result, reshaped, data_scope) : None
+        - clear_screen() : None
+    }
+
+    class PromptHandler {
+        + prompt(names, gdps, data_scope, yearly_data, years,\n  yearly_gdp, year_slice, config, reshaped) : None
+        - exit_prompt() : None
+    }
+
+    class ChartImplementations {
+        + bar_chart(names, gdps, data_scope) : None
+        + pie_chart(names, gdps, data_scope) : None
+        + line_plot(years, yearly_gdp) : None
+        + lollipop_plot(names, gdps, config, data_scope) : None
+        + dot_plot(names, gdps, config, data_scope) : None
+        + tree_map(year_slice, config) : None
+        + word_cloud(year_slice, config) : None
+        + slope_chart(config, reshaped, year_slice) : None
+    }
+}
+
+' ─────────────────────────────────────────
+' Entry Point
+' ─────────────────────────────────────────
+class main <<entrypoint>> {
+    + load_config() : Dict
+    + bootstrap() : None
+}
+
+' ─────────────────────────────────────────
+' Relationships
+' ─────────────────────────────────────────
+
+' Protocol implementations
+TransformationEngine ..|> PipelineService
+ConsoleWriter ..|> DataSink
+ChartWriter ..|> DataSink
+
+' main orchestration
+main --> OutputManager : creates
+main --> TransformationEngine : creates
+main --> InputManager : creates
+
+' Dependency injection
+OutputManager --> ConsoleWriter : instantiates (output=console)
+OutputManager --> ChartWriter : instantiates (output=chart)
+
+InputManager --> PipelineService : calls execute()
+TransformationEngine --> DataSink : calls write()
+TransformationEngine --> OPERATIONS : dispatches to
+
+ChartWriter --> Dashboard : calls show_dashboard()
+Dashboard --> PromptHandler : calls prompt()
+PromptHandler --> ChartImplementations : dispatches chart renders
+
+@enduml
