@@ -12,58 +12,60 @@ Made for our SDA semester project, the major purpose of this project is to showc
 
 ## Project Structure
 ```bash
-.
-├── config.json                     # User Configuration File
-├── main.py                         # Entry Point
-├── assets
-│   └── World_Bank_Dataset.csv      # Data-set
-├── helpers
-│   ├── chart_implementations.py    # Graphing Functions
-│   └── prompt_handler.py           # Dashboard-menu Handler
-└── src
-    ├── dashboard.py                # Dashboard Controller
-    ├── data_loader.py              # Loads data from Data-set
-    └── data_processor.py           # Sanitizes, filters, processes data
+Global-GDP-Analysis/
+├── README.md
+├── config.json
+├── core/
+│   ├── __init__.py
+│   ├── compute_operations.py
+│   ├── data_processor.py
+│   └── protocols.py
+├── data/
+│   ├── World_Bank_Dataset.csv
+│   └── gdp_with_continent_filled.json
+├── main.py
+└── plugins/
+    ├── input/
+    │   ├── __init__.py
+    │   └── data_loader.py
+    └── output/
+        ├── __init__.py
+        ├── chart_implementations.py
+        ├── chart_render.py
+        ├── console_writer.py
+        ├── dashboard.py
+        ├── prompt_handler.py
+        └── protocols.py
 ```
 
 ---
 
 ## How to Run
 
-### Clone this repository
-``` bash
-# For ubuntu only:
-sudo apt install -y git
-
-# For Archlinux only:
-sudo pacman -S --needed git base-devel
-
+**Clone the Repository**
+```bash
 git clone https://github.com/OrionShinesBright/Global-GDP-Analysis/
 cd Global-GDP-Analysis/
 ```
 
-### Install the dependencies for your system
-**For Arch Linux**
+**Get Dependencies**
 ```bash
-sudo pacman -S --needed python python-matplotlib python-pycountry
-yay -S python-squarify python-wordcloud python-inquirerpy
+# For Archlinux
+sudo pacman -S --needed base-devel git python python-matplotlib python-pycountry
+
+# For Ubuntu
+sudo apt install -y python3-tk python3-matplotlib git curl python-is-python3 python3
 ```
-**For Ubuntu**
+
+**Setup the Environment**
 ```bash
-sudo apt install -y curl python-is-python3 python3
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 uv venv
 uv pip install squarify wordcloud inquirerpy pycountry
-sudo apt install -y python3-tk python3-matplotlib
 ```
 
-### Run the Dashboard
-**For Arch Linux**
-```bash
-python main.py
-```
-**For Ubuntu**
+**Run the Dashboard**
 ```bash
 uv run main.py
 ```
