@@ -17,7 +17,7 @@ from itertools import repeat
 import os
 
 # Internal Dependencies
-from helpers.prompt_handler import prompt
+from .prompt_handler import prompt
 
 
 ###############################################################################
@@ -34,37 +34,6 @@ def clear_screen():
         os.system("cls" if os.name == "nt" else "clear")
 
 
-###############################################################################
-# Function to Display Dashboard Header
-#
-# Displays the reults of the computations, as well as information
-# About the provided configuration in config.json
-#
-# ARG: data_scope (list), config (list), result (int)
-# RET:
-def dashboard_info(data_scope, config, result):
-    # dashboard visualization (TUI based)
-    print(f"\t\033[0;90m╭────────────────────────────────────┬─────────────╮")
-    print(f"\t\033[0;90m│ \033[0;34mDASHBOARD FOR WORLD BANK ANALYTICS \033[0;90m│ \033[0;31m1970 ─ 2020 \033[0;90m│")
-    print(f"\t\033[0;90m╰────────────────────────────────────┴─────────────╯")
-    print(f"\t\033[0;90m────────────┬───────────────────────────────────────")
-    print(f"\t\033[0;90m  \033[0;92mScope     \033[0;90m│\t\033[0;93m{data_scope}")
-    print(f"\t\033[0;90m  \033[0;92mRegion    \033[0;90m│\t\033[0;93m{config['region']}")
-    print(f"\t\033[0;90m  \033[0;92mYear      \033[0;90m│\t\033[0;93m{config['year']}")
-    print(f"\t\033[0;90m  \033[0;92mOperation \033[0;90m│\t\033[0;93m{config['operation']}")
-    # Handle 'not found' error
-    if result is None:
-        print(f"\t\033[0;90m  \033[0;0mNo data available for this configuration.")
-        print(f"\t\033[0;90m────────────────────────────────────────────────────")
-        return
-    # Print result of computation
-    print(f"\t\033[0;90m  \033[0;92mResult    \033[0;90m│\t\033[0;93m{result:,.2f}", end = "")
-    if data_scope == "Country-wise":
-        print(f"(Single country stats are the GDP value itself)")
-    else:
-        print(f"")
-    print(f"\t\033[0;90m────────────┴───────────────────────────────────────")
-
 
 ###############################################################################
 # Dashboard Presentation Function
@@ -74,7 +43,7 @@ def dashboard_info(data_scope, config, result):
 #
 # ARG: config (list), filtered_data (list), result (int)
 # RET: json stream
-def show_dashboard(config, filtered_data, result, data_scope, reshaped):
+def show_dashboard(config, filtered_data, result,reshaped,data_scope = None):
     names = list(map(lambda d: d["name"], filtered_data))
     gdps = list(map(lambda d: d["gdp"], filtered_data))
     yearly_data = list(
@@ -107,7 +76,5 @@ def show_dashboard(config, filtered_data, result, data_scope, reshaped):
         )
     )
 
-    for _ in repeat(None):
-        clear_screen()
-        dashboard_info(data_scope, config, result)
-        prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped)
+    clear_screen()
+    prompt(names, gdps, data_scope, yearly_data, years, yearly_gdp, year_slice, config, reshaped)
