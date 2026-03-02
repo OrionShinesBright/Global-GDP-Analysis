@@ -17,12 +17,12 @@ from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
 
 # Internal Dependencies
-from helpers.chart_implementations import *
+from .chart_implementations import *
 
 
 ########################################
 # Function to break out of Prompt loop #
-########################################
+##################pyts######################
 def exit_prompt():
     print("\n\n\033[0;35m\tThank you for analysing the dataset with us.\n\033[0;33m\tGood bye!\n")
     exit(1)
