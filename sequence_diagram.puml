@@ -1,5 +1,5 @@
 @startuml sequence_diagram
-title SDA Pipeline — Sequence Diagram
+title SDA Pipeline Sequence Diagram
 
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
