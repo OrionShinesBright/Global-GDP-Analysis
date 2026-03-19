@@ -6,202 +6,177 @@
 """
 > helpers/chart_implementations.py
 
-> Helper Module, to be called from the dashboard
-> Creates the graphs and charts, handles matplotlib internals.
-> Handles all visualizations modularly
+> Helper Module, to be called from the dashboard.
+> Renders real-time line charts to in-memory PNG buffers
+> Needed to do this because directly embedding the
+> Matplotlib charts into web interfaces is very hard and required me to make
+> weird web-queues and stuff like that. Can't be bothered to do that.
+> So have come up with this, slightly less elegant solution.
 """
 
-# Main Graphing Library
+import io
+import time
+import threading
+
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-# For tree_map graph type
-import squarify
-# For word_cloud graph type
-from wordcloud import WordCloud
 
 
+###############################################################################
+# Shared in-memory stores
 #
-# Bar chart - Region
-#
-def bar_chart(names, gdps, data_scope):
-    if data_scope == "Country-wise":
-        print("\n\n\t\033[0;31mChosen region is a country\n\tRegion wise bar chart is not a good statistic for this\033[0;0m\n\n")
-        input("[Press Enter to Continue]")
-    plt.figure(figsize=(12, 6))
-    plt.bar(names, gdps, width=0.6)
-    plt.ylim(0, max(gdps) * 1.25)
-    plt.title(f"{data_scope} GDP Comparison")
-    plt.xlabel(data_scope)
-    plt.ylabel("GDP (Current US$ [in Billions])")
-    plt.xticks(rotation=90, ha="right")
-    plt.tight_layout()
-    plt.show()
+# _chart_store : chart title (str) maps to latest PNG bytes (bytes)
+# _queue_store : label (str) maps to QueueImplementation, for backpressure display
+_chart_store   = {}
+
+_queue_store   = {}
+_max_q_size    = 50
+
+_store_lock    = threading.Lock()
+
+_server_started = False
+_server_lock   = threading.Lock()
+
+_chart_count      = 0
+_chart_count_lock = threading.Lock()
+
+# colors
+_PALETTE = [
+    '#6366f1',
+    '#06b6d4',
+    '#22c55e',
+    '#f59e0b'
+] 
 
 
+###############################################################################
+# register_queues
 #
-# Pie Chart - Region
+# this hands the references of the queeues to the web server so that
+# it can implement the backpressure charts
 #
-def pie_chart(names, gdps, data_scope):
-    if data_scope == "Country-wise":
-        print("\n\n\t\033[0;31mChosen region is a country\n\tRegion wise pie chart is not a good statistic for this\033[0;0m\n\n")
-        input("[Press Enter to Continue]")
-    plt.figure()
-    wedges, _, autotexts = plt.pie(
-        gdps,
-        autopct="%1.1f%%",
-        startangle=140,
-        pctdistance=0.8
+# ARG: stream_map (dict), max_size (int)
+def register_queues(stream_map: dict, max_size: int) -> None:
+    global _max_q_size
+    _queue_store.update(stream_map)
+    _max_q_size = max_size
+
+
+###############################################################################
+# _ensure_server
+#
+# Starts the Flask dashboard thread exactly once, in a background thread
+# so it does not block the caller.
+def _ensure_server() -> None:
+    global _server_started
+    with _server_lock:
+        if _server_started:
+            return
+        _server_started = True
+
+    from plugins.output.web.server import start_server_thread
+    t = threading.Thread(
+        target=start_server_thread,
+        args=(_chart_store, _queue_store, _store_lock, _max_q_size),
+        daemon=True
     )
-    # Hide percentage labels below threshold
-    for autotext in autotexts:
-        pct = float(autotext.get_text().replace('%', ''))
-        if pct < 2:
-            autotext.set_text("")
-    plt.legend(
-        wedges,
-        names,
-        title="Categories",
-        loc="center left",
-        bbox_to_anchor=(1, 0.5)
-    )
-    plt.title(f"{data_scope} GDP Distribution")
-    plt.subplots_adjust(right=0.75)
-    plt.show()
+    t.start()
+    # Brief pause so Flask is ready before the first chart update hits
+    time.sleep(1.5)
 
 
+###############################################################################
+# Setup_line_plot
 #
-# Line Plot - Year
+# Creates a styled matplotlib figure (dark theme).
+# Triggers WEb server startup on first call.
 #
-def line_plot(years, yearly_gdp):
+# ARG: title (str), x_label (str), y_label (str)
+# RET: figure, axis, line
+def Setup_line_plot(title, x_label, y_label):
+    global _chart_count
+
+    # get the server going
+    _ensure_server()
+
+    # make sure we know that the chart has instatiated
+    with _chart_count_lock:
+        color = _PALETTE[_chart_count % len(_PALETTE)]
+        _chart_count += 1
+
+    # extract out the elements
+    figure, axis = plt.subplots(figsize=(8, 5))
+
+    # do some voodoo magic lol
+    figure.patch.set_facecolor('#1a1d27')
+    axis.set_facecolor('#0f1117')
+    axis.set_title(title,    color='#e2e8f0', fontsize=12, pad=10)
+    axis.set_xlabel(x_label, color='#64748b', fontsize=10)
+    axis.set_ylabel(y_label, color='#64748b', fontsize=10)
+    axis.tick_params(colors='#64748b')
+    axis.grid(True, color='#1e2130', linewidth=0.8)
+    
+    for spine in axis.spines.values():
+        spine.set_edgecolor('#2a2d3a')
+
+    line, = axis.plot([], [], marker='o', markersize=3, color=color, linewidth=2)
+    plt.tight_layout(pad=1.5)
+    figure._line_color = color
+
+    return figure, axis, line
+
+
+###############################################################################
+# Update_line_plot
+#
+# Redraws the line with new data and saves result to the in-memory store.
+#
+# ARG: figure, axis, line, x_axis (list), y_axis (list)
+def Update_line_plot(figure, axis, line, x_axis, y_axis):
+    # wow magic
     cleaned = [
-        (y, g) for y, g in zip(years, yearly_gdp)
-        if g is not None and g > 0
+        (y, g) for y, g in zip(x_axis, y_axis)
+        if g is not None
     ]
     if not cleaned:
-        print("\n\n\t\033[0;31mNo valid yearly GDP data to plot\033[0;0m\n")
-        input("[Press Enter to continue]")
         return
-    years, yearly_gdp = zip(*sorted(cleaned))
-    plt.figure(figsize=(8, 5))
-    plt.plot(years, yearly_gdp, marker="o")
-    plt.title("Year-wise GDP Trend")
-    plt.xlabel("Year")
-    plt.ylabel("GDP (Current US$ [in Billions])")
-    plt.tight_layout()
-    plt.show()
+    # some more voodoo
+    x_axis, y_axis = zip(*sorted(cleaned))
+    line.set_xdata(x_axis)
+    line.set_ydata(y_axis)
+    axis.relim()
+    axis.autoscale_view()
 
-
-
-#
-# Lollipop Chart - Region
-#
-def lollipop_plot(names, gdps, config, data_scope):
-    if data_scope == "Country-wise":
-        print("\n\n\t\033[0;31mChosen region is a country\n\tRegion wise lollipop chart is not a good statistic for this\033[0;0m\n\n")
-        input("[Press Enter to Continue]")
-    plt.figure(figsize=(12,6))
-    plt.hlines(y=names, xmin=0, xmax=gdps, color='skyblue')
-    plt.plot(gdps, names, "o", color="orange")
-    plt.title(f"Country GDPs in {config['year']}")
-    plt.xlabel("GDP (Current US$ [in Billions])")
-    plt.ylabel("Country")
-    plt.tight_layout()
-    plt.show()
-
-
-#
-# Dot + Bubble Plot - Region
-#
-def dot_plot(names, gdps, config, data_scope):
-    if data_scope == "Country-wise":
-        print("\n\n\t\033[0;31mChosen region is a country\n\tRegion wise dot plot is not a good statistic for this\033[0;0m\n\n")
-        input("[Press Enter to Continue]")
-    plt.figure(figsize=(12,6))
-    plt.scatter(names, gdps, color="green", s=50)  # s=size of marker
-    plt.title(f"Country GDPs in {config['year']}")
-    plt.xlabel("Country")
-    plt.ylabel("GDP (Current US$ [in Billions])")
-    plt.xticks(rotation=90)
-    plt.tight_layout()
-    sizes = [g/1e10 for g in gdps]  # scale down for marker size
-    plt.scatter(names, gdps, s=sizes, alpha=0.6)
-    plt.xticks(rotation=90)
-    plt.ylabel("GDP (Current US$ [in Billions])")
-    plt.title(f"Country GDPs in {config['year']}")
-    plt.tight_layout()
-    plt.show()
-
-
-#
-# Tree Map - Global
-#
-def tree_map(year_slice, config):
-    print("\n\n\t\033[0;32mThis is a special kind of graph\n\tIt's scope is global, and displays distribution of GDP in chosen year\033[0;0m\n\n")
-    input("[Press Enter to Continue]")
-
-    countries = list(map(lambda d: d["name"], year_slice))
-    gdps = list(map(lambda d: d["gdp"], year_slice))
-
-    # Only label countries contributing >1% of total GDP
-    total = sum(gdps)
-    labels = [c if g/total > 0.01 else "" for c, g in zip(countries, gdps)]
-
-    plt.figure(figsize=(12,8))
-    squarify.plot(
-        sizes=gdps,
-        label=labels,
-        alpha=0.8,
-        color=plt.cm.tab20.colors
+    # honestly Harry Potter was better
+    buf = io.BytesIO()
+    # ok this was fun to do
+    figure.savefig(
+        buf,
+        format='png',
+        dpi=90,
+        bbox_inches='tight',
+        facecolor=figure.get_facecolor()
     )
-    plt.title(f"Country GDP Treemap ({config['year']})")
-    plt.axis('off')
-    plt.tight_layout()
-    plt.show()
+    buf.seek(0)
+
+    title = axis.get_title()
+    with _store_lock:
+        _chart_store[title] = buf.getvalue()
 
 
+###############################################################################
+# Final_line_plot
 #
-# Word Cloud - Global
-#
-def word_cloud(year_slice, config):
-    print("\n\n\t\033[0;32mThis is a special kind of graph\n\tIt's scope is global, and displays distribution of GDP in chosen year\033[0;0m\n\n")
-    input("[Press Enter to Continue]")
-    gdp_dict = {d["name"]: d["gdp"] for d in year_slice}
-    wordcloud = WordCloud(
-        width=1200,
-        height=600,
-        background_color='white',
-        colormap='tab20',
-        normalize_plurals=False
-    ).generate_from_frequencies(gdp_dict)
-    plt.figure(figsize=(15,8))
-    plt.imshow(wordcloud, interpolation='bilinear')
-    plt.axis('off')
-    plt.title(f"Country GDP Word Cloud ({config['year']})")
-    plt.show()
-
-
-#
-# Slope Chart - Year
-#
-def slope_chart(config, reshaped, year_slice):
-    prev_year = config["year"] - 1
-    countries = list(map(lambda d: d["name"], year_slice))
-    prev_slice = list(
-        filter(
-            lambda d: d["year"] == prev_year and d["type"] == "country" and d["name"] in countries,
-            reshaped
-        )
-    )
-    prev_gdp_dict = {d["name"]: d["gdp"] for d in prev_slice}
-    curr_gdp_dict = {d["name"]: d["gdp"] for d in year_slice}
-    plt.figure(figsize=(12,8))
-    for country in countries:
-        if country in prev_gdp_dict:
-            plt.plot([prev_year, config["year"]],
-                     [prev_gdp_dict[country], curr_gdp_dict[country]],
-                     marker='o', label=country)
-    plt.xlabel("Year")
-    plt.ylabel("GDP (Current US$ [in Billions])")
-    plt.title(f"Slope Chart: GDP Change {prev_year} → {config['year']}")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+# Marks pipeline as done and keeps the Output process alive so we
+# can continue serving the final chart state for whatever amount of seconds.
+def Final_line_plot():
+    # set the flag so we know chart is stored
+    with _store_lock:
+        _chart_store['__done__'] = True
+    # tell the person at the console that we are done.
+    print("[Output]: done")
+    print("\n\n\t\t Thank you. You may close the browser tab now.\n\n")
+    # eepy meepy
+    whatever = 2
+    time.sleep(whatever)
