@@ -1,0 +1,152 @@
+@startuml sequence_diagram
+title SDA Pipeline — Sequence Diagram
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor       "User"              as User
+participant "bootstrap()"       as Main       #LightBlue
+participant "QueueImplementation\n(RawDataStream)"     as RawQ       #LightYellow
+participant "QueueImplementation\n(IntermediateStream)" as IntQ      #LightYellow
+participant "QueueImplementation\n(ProcessedDataStream)" as ProcQ    #LightYellow
+participant "PipelineMonitor"   as Monitor    #LightGreen
+participant "PipelineTelemetry" as Telemetry  #LightGreen
+participant "InputManager"      as Input      #Wheat
+participant "TransformationEngine\n(×N workers)" as Core   #Wheat
+participant "Aggregator"        as Agg        #Wheat
+participant "OutputManager"     as Output     #Wheat
+participant "ConsoleWriter"     as Console    #MistyRose
+participant "ChartWriter"       as Chart      #MistyRose
+
+== Bootstrap & Setup ==
+
+User  -> Main      : run bootstrap()
+Main  -> RawQ      : QueueImplementation(max_size)
+Main  -> IntQ      : QueueImplementation(max_size)
+Main  -> ProcQ     : QueueImplementation(max_size)
+Main  -> Monitor   : PipelineMonitor(stream_map, max_size)
+Main  -> Input     : InputManager(config, RawDataStream)
+Main  -> Core      : TransformationEngine × N\n(config, RawDataStream, IntermediateStream)
+Main  -> Agg       : Aggregator(config, IntermediateStream, ProcessedDataStream)
+Main  -> Output    : OutputManager(config, ProcessedDataStream, stream_map)
+
+== Process Launch ==
+
+Main  -> Monitor   : start()           [daemon Process]
+Monitor -> Telemetry: PipelineTelemetry(queues, max_size)
+Monitor -> Telemetry: subscribe(self)
+activate Telemetry
+Telemetry -> Monitor: notify loop starts (background)
+
+Main  -> Output    : Process(output._choose_sink).start()
+activate Output
+
+Main  -> Agg       : Process(aggregator.run).start()
+activate Agg
+
+Main  -> Core      : Process(engine.execute).start() × N
+activate Core
+
+Main  -> Input     : Process(reader.run).start()
+activate Input
+
+== Data Ingestion (InputManager) ==
+
+loop for each row in dataset (CSV or JSON)
+    Input -> RawQ  : SendToStream(row_dict)
+    Input -> Input : sleep(input_delay)
+end
+
+Input -> RawQ      : SendToStream(None) × N cores\n[termination sentinel per worker]
+deactivate Input
+
+== Queue Monitoring (background) ==
+
+loop every poll_interval
+    Telemetry -> RawQ  : get_size()
+    Telemetry -> IntQ  : get_size()
+    Telemetry -> ProcQ : get_size()
+    Telemetry -> Monitor: update(snapshot)
+    Monitor -> Monitor : redraw bar chart
+end
+
+== Core Processing (TransformationEngine × N) ==
+
+loop until None sentinel received
+    Core -> RawQ       : PickFromStream()
+    RawQ -> Core       : row_dict  (or None)
+    alt row is None
+        Core -> IntQ   : SendToStream((None, None))
+        note right: worker signals termination
+    else valid row
+        Core -> Core   : fix_fieldnames(config, row)
+        Core -> Core   : verify_security_hash(config, reshaped_row)
+        alt hash valid
+            Core -> IntQ : SendToStream((metric_value, reshaped_row))
+        else hash invalid
+            Core -> Core : log DROP and continue
+        end
+    end
+end
+deactivate Core
+
+== Aggregation (Aggregator) ==
+
+loop until all core terminations received
+    Agg -> IntQ        : PickFromStream()
+    IntQ -> Agg        : (metric_value, data)  (or (None, None))
+    alt data is None
+        Agg -> Agg     : termination_count++
+        alt termination_count >= No_of_cores
+            Agg -> ProcQ : SendToStream((None, None))
+            note right: signals Output to stop
+        end
+    else valid data
+        Agg -> Agg     : compute_running_average(window, metric_value, window_size)
+        Agg -> ProcQ   : SendToStream((average, data))
+    end
+end
+deactivate Agg
+
+== Output (OutputManager) ==
+
+Output -> Output   : register_queues(stream_map, max_size)\n[starts Flask web server thread]
+
+loop until termination sentinel
+    Output -> ProcQ    : PickFromStream()
+    ProcQ -> Output    : (average, packet)  (or (None, None))
+    alt packet is None
+        Output -> Output : log termination
+    else valid packet
+        Output -> Console : write(packet, average, count)
+        Console -> Console : print formatted line to terminal
+
+        Output -> Output   : update _chart_store['__latest__']
+
+        loop for each chart in config["visualizations"]["data_charts"]
+            alt type == real_time_line_graph_values
+                Output -> Chart : render(title, x_label, y_label,\n packet[x_axis], packet[y_axis])
+            else type == real_time_line_graph_average
+                Output -> Chart : render(title, x_label, y_label,\n packet[x_axis], average)
+            end
+            Chart -> Chart : Setup_line_plot() if new
+            Chart -> Chart : Update_line_plot() → PNG → _chart_store
+        end
+    end
+end
+
+Output -> Chart    : finalize()
+Chart -> Chart     : Final_line_plot()\n[set __done__ flag, sleep 2 s]
+deactivate Output
+
+== Teardown ==
+
+Main -> Input      : join()
+Main -> Core       : join() × N
+Main -> Agg        : join()
+Main -> Output     : join()
+Main -> Monitor    : stop()
+deactivate Telemetry
+Main -> User       : pipeline complete
+
+@enduml
