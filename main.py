@@ -47,16 +47,20 @@ def bootstrap():
         #0. FETCH
         config = load_config()  
         
-        #1. output module
-        output_manager = OutputManager(config)
-        sink = output_manager.get_sink()
+         # 1. STREAMS HANDLING
 
-        #2. Core Engine
-        engine = TransformationEngine(config,sink)
-        
-        #3. Input
-        reader = InputManager(config,engine)
-        reader.run()
+        # > 1(a). Input         -> Core
+        RawDataStream = QueueImplementation(
+                config.get("pipeline_dynamics").get("stream_queue_max_size")
+        )
+        # > 1(b). Core workers  -> Aggregator
+        IntermediateStream = QueueImplementation(
+                config.get("pipeline_dynamics").get("stream_queue_max_size")
+        )
+        # > 1(c). Aggregator    -> Output
+        ProcessedDataStream = QueueImplementation(
+                config.get("pipeline_dynamics").get("stream_queue_max_size")
+        )
         
     except Exception as e:
         import traceback
