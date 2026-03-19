@@ -133,6 +133,14 @@ def bootstrap():
 
         Input.start()                           # input
 
+        # Ending processes (by joining them with bootstrap again)
+        Input.join()                            # input
+        for p in Process_cores:                 # core engines
+            p.join()
+        AggregatorProcess.join()                # aggregator
+        Output.join()                           # output
+        queues.stop()                           # queues
+
         traceback.print_exc()
     except Exception as e:
         import traceback
