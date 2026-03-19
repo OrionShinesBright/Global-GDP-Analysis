@@ -61,10 +61,32 @@ def bootstrap():
         ProcessedDataStream = QueueImplementation(
                 config.get("pipeline_dynamics").get("stream_queue_max_size")
         )
-        
+        # boolean dict for visualization
+        map_to_streams = {
+            "show_raw_stream":          "RawDataStream",
+            "show_intermediate_stream": "IntermediateStream",
+            "show_processed_stream":    "ProcessedDataStream"
+        }
+
+        # streams dict for pipeline monitor
+        stream_map = {
+            "RawDataStream":        RawDataStream,
+            "IntermediateStream":   IntermediateStream,
+            "ProcessedDataStream":  ProcessedDataStream
+        }
+
+        # check which stream to keep in visualizations
+        for key in list(map_to_streams.keys()):
+            if config["visualizations"]["telemetry"].get(key) == False:
+                del stream_map[map_to_streams[key]]
+
+
+        import traceback
+        traceback.print_exc()
     except Exception as e:
         import traceback
         traceback.print_exc()
+
 
 
 #######
