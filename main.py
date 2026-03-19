@@ -10,9 +10,16 @@
 > Controller for all operations
 """
 import json
+
 from core.data_processor import TransformationEngine
+from core.aggregator import Aggregator
+
 from plugins.input.data_loader import InputManager
 from plugins.output.protocols import OutputManager
+from plugins.output.pipeline_monitor import PipelineMonitor
+
+from stream.Stream import QueueImplementation
+from multiprocessing import Process
 
 
 CONFIG_FILE = "config.json"
