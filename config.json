@@ -1,9 +1,0 @@
-
-{
-  "input": "csv",
-  "path" : "data/World_Bank_Dataset.csv",
-  "output": "chart",
-  "region": "Europe",
-  "year": 1989,
-  "operation": "top_10"
-}
