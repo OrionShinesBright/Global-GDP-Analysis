@@ -105,8 +105,34 @@ def bootstrap():
         # Aggregator (imperitive shell)
         aggregator = Aggregator(config, IntermediateStream, ProcessedDataStream)
 
+        ###############
+        # iii. Output #
+        ###############
+        output_manager = OutputManager(config, ProcessedDataStream, stream_map)
 
-        import traceback
+    # 3. PROCESS MANAGEMENT
+
+        # Creation
+        Input = Process(target=reader.run)
+        AggregatorProcess = Process(target=aggregator.run)
+        Output = Process(target=output_manager._choose_sink)
+
+        # Starting queues (allows us to manage all modules as async)
+        queues.start()
+
+        # Starting modules
+        Output.start()                          # output
+
+        AggregatorProcess.start()               # aggregator
+        
+        Process_cores = []                      # core engines
+        for engine in core_engines:
+            p = Process(target=engine.execute)
+            Process_cores.append(p)
+            p.start()
+
+        Input.start()                           # input
+
         traceback.print_exc()
     except Exception as e:
         import traceback
