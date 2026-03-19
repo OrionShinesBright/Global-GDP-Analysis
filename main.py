@@ -9,6 +9,7 @@
 > Entry Point
 > Controller for all operations
 """
+
 import json
 
 from core.data_processor import TransformationEngine
@@ -20,7 +21,6 @@ from plugins.output.pipeline_monitor import PipelineMonitor
 
 from stream.Stream import QueueImplementation
 from multiprocessing import Process
-
 
 CONFIG_FILE = "config.json"
 
@@ -43,11 +43,17 @@ def load_config():
 # ARG:
 # RET:
 def bootstrap():
+
+    # letting the TA know (hope he doesn't get confused bruh)
+    print("\n\n\t\tVisuals will be shown in your BROWSER.")
+    print("\t\tA window to http://localhost:5000/ should open automatically.")
+    print("\t\tIf it doesn't please copy and paste the url in your browser manually.\n")
+
     try:
-        #0. FETCH
-        config = load_config()  
-        
-         # 1. STREAMS HANDLING
+    # 0. FETCH DATA
+        config = load_config()
+
+    # 1. STREAMS HANDLING
 
         # > 1(a). Input         -> Core
         RawDataStream = QueueImplementation(
@@ -61,6 +67,7 @@ def bootstrap():
         ProcessedDataStream = QueueImplementation(
                 config.get("pipeline_dynamics").get("stream_queue_max_size")
         )
+
         # boolean dict for visualization
         map_to_streams = {
             "show_raw_stream":          "RawDataStream",
@@ -79,6 +86,7 @@ def bootstrap():
         for key in list(map_to_streams.keys()):
             if config["visualizations"]["telemetry"].get(key) == False:
                 del stream_map[map_to_streams[key]]
+
         # get the monitor in running
         queues = PipelineMonitor(
                 stream_map,
@@ -141,11 +149,10 @@ def bootstrap():
         Output.join()                           # output
         queues.stop()                           # queues
 
-        traceback.print_exc()
+    # handle errors gracefully (print stack trace)
     except Exception as e:
         import traceback
         traceback.print_exc()
-
 
 
 #######
