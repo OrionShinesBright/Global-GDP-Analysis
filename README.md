@@ -10,8 +10,12 @@ Made for our SDA semester project, the major purpose of this project is to showc
 
 ---
 
-## UML Diagram
-![Diagram Genned with Plantuml](plantuml_diagram_image.png)
+## Class Diagram
+![Class Diagram Genned with Plantuml](class_diagram.png)
+
+
+## Sequence Diagram
+![Class Diagram Genned with Plantuml](sequence_diagram.png)
 
 ---
 
