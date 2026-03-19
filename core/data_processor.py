@@ -7,177 +7,124 @@
 > data_processor.py
 
 > Second logical part of the program
-> Obtains csv formatted data from the data_loader function.
+> Obtains formatted data from the data_loader function.
 > Filters and aligns data from the given columns as required.
 """
 
-# To separately handle regions vs countries
-import pycountry
+import hashlib
+
 from typing import List,Dict
-from core.protocols import PipelineService, DataSink
-from .compute_operations import *
+from .protocols import ToStream, FromStream
 
 ##############################################################################
-# Recieving Data from Input thingy:
+# Transformation Engine Class
+#
+# Recieving Data from Input thingy
+# Basically implements functionality to:
+#   - get data
+#   - transform and transmit data
+#       - reshape data
+#       - verify data integrity
+#       - send to telemetry if valid
+#   - rename the columns and map to programmed ones
+class TransformationEngine:
 
-class TransformationEngine(PipelineService):
-    def __init__(self,config:Dict,sink:DataSink):
+    # init data
+    def __init__(self,config:Dict,service:FromStream,service2:ToStream)->None:
         self.config = config
-        self.sink = sink
+        self.service = service
+        self.service2 = service2
     
-    #working on data
-    def execute(self,raw_data:List[Dict]):
-        
-        
-        target = self.config.get("region")
-        year  = self.config.get("year")
-    
-        reshaped_data = self.reshape_data(raw_data)
-        filtered_data = self.filter_data(reshaped_data,target,year)
-        
-        op = self.config.get("operation")
-        
-        results = self.compute_stat(filtered_data,op,reshaped_data,self.config)
-        
-    #time to send data to output fileee
-        self.sink.write(results,self.config,filtered_data,reshaped_data)
+    # transform and transmit data
+    def execute(self):
 
+        # neeed to read forever
+        while True:
 
-###############################################################################
-# Data Realignment Function
-#
-# Convert wide-year columns into:
-# Country | Region | Year | GDP
-#
-# ARG: rows (list)
-# RET: rows (list)
-    def reshape_data(self,rows):
-        return [item for row in rows for item in self.expand_row(row)]
+            # get data
+            raw_data = self.service.PickFromStream()
 
-###############################################################################
-# Filtration Function
-#
-# This function creates a subset of the dataset that only contains
-# the modified rows that we require, i.e:
-#       1. Region
-#       2. Year
-#
-# ARG: data (list), region (str), year (int), row_type (str)
-# RET: filtered_data (list)
-    def filter_data(self,data, target, year, row_type=None):
-        is_target_country = self.is_country(target)
-
-        return list(
-            filter(
-                lambda d:
-                    (
-                        # Country-wise query
-                        (is_target_country and d["type"] == "country" and d["name"] == target)
-                        or
-                        # Region-wise query
-                        (not is_target_country and
-                         (
-                            (d["type"] == "region" and d["name"] == target) or
-                            (d["type"] == "country" and d["region"] == target)
-                         ))
-                    )
-                    and d["year"] == year
-                    and (row_type is None or d["type"] == row_type),
-                data
-            )
-        )
-###############################################################################
-# Row Consolidation Function, Called in reshape_data() for each row individually
-#
-# The years in the dataset are all displayed as separate columns, which is hard to work with
-# Therefore this function integrates them as one column, by grouping their respective
-# GDPs into a list.
-#
-# ARG: row (list)
-# RET: row (list)
-    def expand_row(self,row):
-        # Holding names of dataset columns
-        country = row["Country Name"]
-        region = row["Continent"]
-        # Figuring out the type for the region
-        row_type = "country" if self.is_country(country) else "region"
-        # Returning newly modified row as a list
-        return list(
-            map(
-                # mapping
-                lambda y: {
-                    "name": country,
-                    "region": region,
-                    "year": int(y),
-                    "gdp": float(row[y]),
-                    "type": row_type,
-                },
-                # filtering + appending
-                filter(lambda k: k.isdigit() and (row[k] != "" and row[k] != None), row.keys()),
-            )
-        )
-###############################################################################
-# Country vs Region Checking Function
-#
-# Helper function to be used in separation of data
-#
-# ARG: name (str)
-# RET: is_country (bool)
-    def is_country(self,name):
-        try:
-            pycountry.countries.lookup(name)
-            return True
-        except LookupError:
-            return False
+            # send empty packet to aggregator if you get an empty one
+            if raw_data is None:
+                print("[Core]: Worker done.")
+                self.service2.SendToStream((None,None))
+                break
             
-###############################################################################
-# Computation Dispatcher
-#
-# Builds a uniform context dict and delegates to the matching function
-# in OPERATIONS.  The caller (main.py) passes the full reshaped dataset
-# and the raw config so that operations with wider scope (multi-year,
-# global, etc.) have everything they need.
-#
-# Range fields are derived from config["year"], not read from config,
-# so config.json stays in its original 4-field format:
-#
-#   year_start   = year - LOOKBACK_YEARS   (default: 10-year window)
-#   year_end     = year
-#   decline_years= DECLINE_WINDOW          (default: 5 consecutive years)
-#
-# Supported operation keys: see src/compute_operations.OPERATIONS
-#
-# ARG: filtered  (list)  : rows pre-filtered to config region + year
-#      operation (str)   : config["operation"] key
-#      reshaped  (list)  : full dataset (all years, all rows)
-#      config    (dict)  : raw config dict from config.json
-# RET: result    (any)   : type depends on operation; see compute_operations.py
-    def compute_stat(self,filtered, operation, reshaped=None, config=None):
-        if reshaped is None:
-            reshaped = []
-        if config is None:
-            config = {}
+            # reshape data (generic kyun keh SDA)
+            reshaped_data = self.fix_fieldnames(self.config,raw_data)
 
-        if operation not in OPERATIONS:
-            raise ValueError(
-                f"Unknown operation '{operation}'. "
-                f"Valid operations: {sorted(OPERATIONS.keys())}"
-            )
+            # check data integrity
+            if(self.verify_security_hash(self.config,reshaped_data) == False):
+                # if failed, print that we dropped it
+                print(f"[Processor]: DROPPED ({
+                      reshaped_data.get('metric_value','?')
+                }), HASH {
+                      str(reshaped_data.get('security_hash','????'))[-4:]
+                }")
+                # and don't do anything else on this packet
+                continue
 
-        # Internal defaults — derived from year, not read from config.json
-        LOOKBACK_YEARS = 10
-        DECLINE_WINDOW = 5
+            # transmit to telemetry
+            for i in reshaped_data.values():
+                # need to ensure that this is a float
+                # errors without this check
+                if type(i) == float:
+                    self.service2.SendToStream(
+                            # avg    , data_packet
+                            (float(i), reshaped_data)
+                    )
+                    break
 
-        year = config.get("year", 0)
+    ###############################################################################
+    # fixing colunm names
+    #
+    # Convert source_name columns into their implemented entity names
+    # based entirely on project doc. very generic
+    #
+    # Columns:
+    #   - entity_name
+    #   - time_period
+    #   - metric_value
+    #   - security_hash
+    #
+    # ARG: dict instance, configuration file 
+    # RET: dict instance
+    def fix_fieldnames(self,config,row):
 
-        ctx = {
-            "filtered"     : filtered,
-            "reshaped"     : reshaped,
-            "region"       : config.get("region", ""),
-            "year"         : year,
-            "year_start"   : year - LOOKBACK_YEARS,
-            "year_end"     : year,
-            "decline_years": DECLINE_WINDOW,
+        result = {}
+        type_map = {
+            "integer": int,
+            "float": float,
+            "string": str,
+            "bool": bool
         }
 
-        return OPERATIONS[operation](ctx)
+        # for every row of source:
+        #   - map source col to programmed col
+        #   - get correct data type for it
+        #   - cast it to that type
+        for n in config.get("schema_mapping").get("columns"):
+            result[n["internal_mapping"]] = row[n["source_name"]]
+            cast_function = type_map.get(n["data_type"]) 
+            result[n["internal_mapping"]] = cast_function(result[n["internal_mapping"]])
+
+        return result
+
+    ###############################################################################
+    # verifying data integrity
+    #
+    # it verifies Security hash of packet being received 
+    #
+    # ARG: row [dict instance], configuration file
+    # RET: boolean
+    def verify_security_hash(self,config,row)->bool:
+        computed_hash = hashlib.pbkdf2_hmac(
+            hash_name = "sha256",
+
+            password = config.get("processing").get("stateless_tasks").get("secret_key").encode("utf-8"),
+            
+            salt = f"{round(float(row.get("metric_value")),2):.2f}".encode("utf-8"),
+
+            iterations = config.get("processing").get("stateless_tasks").get("iterations")
+        )
+        return computed_hash.hex() == row.get("security_hash")
