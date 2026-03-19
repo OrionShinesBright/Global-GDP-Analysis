@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- Title + names -->
+<header>
+    <div class="live-badge">
+        <div class="live-dot" id="live-dot"></div>
+        <span id="live-text">Live</span>
+    </div>
+    <h1>&#x1F52C; Real-Time, Generic, Fully Concurrent Pipeline Dashboard</h1>
+    <div class="subtitle">
+	    Taha Tahir [24L-0677]<br>Muhammad Rafay [24L-0649]
+    </div>
+</header>
+
+<!-- Config panel -->
+<div class="card">
+    <div class="section-label">Pipeline Configuration Values (from config.json)</div>
+    <div class="config-grid" id="config-grid">
+        <div class="config-item">
+            <div class="key">Status</div>
+            <div class="value">Loading&hellip;</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts side by side -->
+<div class="charts-row" id="charts-row"></div>
+
+<!-- Running Average -->
+<div class="card" style="text-align:center;">
+    <div class="section-label">Running Average (Window Size = <span id="window-size">?</span>)</div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:16px;">
+        <div id="avg-display" style="font-size:42px; font-weight:700; font-family:monospace; color:var(--accent);">
+            &mdash;
+        </div>
+        <div id="avg-arrow" style="font-size:36px; color:var(--muted);">&#x2192;</div>
+    </div>
+    <div id="avg-sub" style="color:var(--muted); font-size:11px; margin-top:4px;">
+        Waiting for data&hellip;
+    </div>
+</div>
+
+<!-- Backpressure -->
+<div class="card">
+    <div class="section-label">Backpressure Monitor</div>
+    <div id="bp-container">
+        <div style="color:var(--muted);font-size:12px;">Waiting for queue data&hellip;</div>
+    </div>
+</div>
+
+<!-- Current packet -->
+<div class="card">
+    <div class="section-label">Currently Analyzed Packet</div>
+    <table class="packet-table">
+        <thead><tr><th>Field</th><th>Value</th></tr></thead>
+        <tbody id="packet-tbody">
+            <tr><td colspan="2" style="color:var(--muted);text-align:center;padding:16px;">
+                Waiting for first verified packet&hellip;
+            </td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Status bar -->
+<div class="card status-bar">
+    <div class="status-elapsed">&#x23F1; Duration: <span id="elapsed">00:00:00</span></div>
+    <div class="pkt-count">Packets processed: <span id="pkt-count">0</span></div>
+    <div class="status-state">
+        <div class="state-dot" id="state-dot"></div>
+        <span id="state-text">Analyzing dataset&hellip;</span>
+    </div>
+</div>
+
+<script>
+    const t0 = Date.now();
+    let _done        = false;
+    let _pktCount    = 0;
+    let _bpInit      = false;
+    const _bpFills   = {};
+    let _packetTimer = null;
+
+    // ── Elapsed timer ────────────────────────────────────────────────────
+    setInterval(() => {
+        const s  = Math.floor((Date.now() - t0) / 1000);
+        const hh = String(Math.floor(s / 3600)).padStart(2,'0');
+        const mm = String(Math.floor((s % 3600) / 60)).padStart(2,'0');
+        const ss = String(s % 60).padStart(2,'0');
+        document.getElementById('elapsed').textContent = hh+':'+mm+':'+ss;
+    }, 1000);
+
+    // ── Config (load once) ───────────────────────────────────────────────
+    fetch('/config').then(r => r.json()).then(cfg => {
+        const dyn  = cfg.pipeline_dynamics;
+        const proc = cfg.processing;
+        const items = [
+            { k:'Dataset',     v: cfg.dataset_path },
+            { k:'Input Delay', v: dyn.input_delay_seconds + 's' },
+            { k:'Workers',     v: dyn.core_parallelism },
+            { k:'Queue Max',   v: dyn.stream_queue_max_size },
+            { k:'Window',      v: proc.stateful_tasks.running_average_window_size },
+            { k:'Algorithm',   v: proc.stateless_tasks.algorithm },
+            { k:'Iterations',  v: proc.stateless_tasks.iterations.toLocaleString() },
+            { k:'Secret Key',  v: proc.stateless_tasks.secret_key },
+        ];
+        const grid = document.getElementById('config-grid');
+        grid.innerHTML = '';
+        items.forEach(({k,v}) => {
+            const el = document.createElement('div');
+            el.className = 'config-item';
+            el.innerHTML = '<div class="key">'+k+'</div>'
+                         + '<div class="value" title="'+v+'">'+v+'</div>';
+            grid.appendChild(el);
+        });
+
+        // Build chart cards from config
+        const row = document.getElementById('charts-row');
+        row.innerHTML = '';
+        (cfg.visualizations.data_charts || []).forEach((chart, i) => {
+            window['_ct'+i] = chart.title;
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            card.innerHTML = '<div class="section-label">'+chart.title.toUpperCase()+'</div>'
+                           + '<div class="chart-placeholder" id="ph-'+i+'">Waiting for data&hellip;</div>'
+                           + '<img id="ci-'+i+'" src="" style="display:none" alt="'+chart.title+'">';
+            row.appendChild(card);
+        });
+    }).catch(()=>{});
+
+    // ── Poll charts ──────────────────────────────────────────────────────
+    function pollCharts() {
+        let i = 0;
+        while (document.getElementById('ci-'+i)) {
+            const title = window['_ct'+i];
+            if (title) {
+                const img = document.getElementById('ci-'+i);
+                const ph  = document.getElementById('ph-'+i);
+                const url = '/chart.png?title='+encodeURIComponent(title)+'&t='+Date.now();
+                fetch(url, {cache:'no-store'}).then(r => {
+                    if (!r.ok || r.status === 204) return;
+                    img.onload = () => { if(ph) ph.style.display='none'; img.style.display='block'; };
+                    img.src = url;
+                }).catch(()=>{});
+            }
+            i++;
+        }
+    }
+
+    // ── Poll backpressure ────────────────────────────────────────────────
+    function pollBackpressure() {
+        fetch('/backpressure').then(r => r.json()).then(data => {
+            const container = document.getElementById('bp-container');
+            const queues    = data.queues;
+            const maxQ      = data.max;
+
+            if (!_bpInit) {
+                _bpInit = true;
+                container.innerHTML = '';
+                Object.keys(queues).forEach(label => {
+                    const row = document.createElement('div');
+                    row.className = 'bp-row';
+                    row.innerHTML = '<div class="bp-label">'+label+'</div>'
+                                  + '<div class="bp-track"><div class="bp-fill" id="bpf-'+label+'" style="width:.2%;background:var(--green)"></div></div>'
+                                  + '<div class="bp-count" id="bpc-'+label+'">0 / '+maxQ+'</div>';
+                    container.appendChild(row);
+                    _bpFills[label] = document.getElementById('bpf-'+label);
+                });
+            }
+
+            Object.entries(queues).forEach(([label, size]) => {
+                const fill = _bpFills[label];
+                if (!fill) return;
+                const pct = (size / maxQ) * 100;
+                fill.style.width           = Math.max(pct, 0.2)+'%';
+		fill.style.backgroundColor = 
+		    pct < 10 ? '#22c55e' :
+		    pct < 20 ? '#5fa411' :
+		    pct < 30 ? '#8eb40f' :
+		    pct < 40 ? '#bcc40d' :
+		    pct < 50 ? '#ead40b' :
+		    pct < 60 ? '#eab308' :
+		    pct < 70 ? '#ec9e16' :
+		    pct < 80 ? '#e8781e' :
+		    pct < 90 ? '#e45225' :
+				'#ef4444';
+                const cnt = document.getElementById('bpc-'+label);
+                if (cnt) cnt.textContent = size+' / '+maxQ;
+            });
+        }).catch(()=>{});
+    }
+
+    // ── Poll latest packet ───────────────────────────────────────────────
+    function pollPacket() {
+        fetch('/latest').then(r => r.json()).then(p => {
+            if (!p || !p.entity_name) return;
+            _pktCount = p.count || _pktCount;
+            document.getElementById('pkt-count').textContent = _pktCount;
+
+            const rows = [
+                { f:'Entity Name',  v: p.entity_name,  cls:'' },
+                { f:'Time Period',  v: p.time_period,  cls:'val-accent' },
+                { f:'Metric Value', v: typeof p.metric_value === 'number'
+                                       ? p.metric_value.toFixed(4) : p.metric_value, cls:'val-accent' },
+                { f:'Running Avg',  v: typeof p.average === 'number'
+                                       ? p.average.toFixed(4) : p.average, cls:'val-accent' },
+                { f:'Auth Hash',    v: p.security_hash, cls:'val-hash' },
+            ];
+            document.getElementById('packet-tbody').innerHTML =
+                rows.map(r =>
+                    '<tr class="packet-flash"><td>'+r.f+'</td><td class="'+r.cls+'">'+r.v+'</td></tr>'
+                ).join('');
+		updateAvgDisplay(p.average);
+        }).catch(()=>{});
+    }
+
+    // ── Poll status ──────────────────────────────────────────────────────
+    function pollStatus() {
+        fetch('/status').then(r => r.json()).then(s => {
+            if (s.done && !_done) {
+                _done = true;
+
+                // Stop packet flashing — pipeline is done
+                if (_packetTimer) { clearInterval(_packetTimer); _packetTimer = null; }
+
+                document.getElementById('live-dot').style.cssText =
+                    'animation:none;background:var(--muted)';
+                document.getElementById('live-text').textContent  = 'Done';
+                document.getElementById('state-dot').className    = 'state-dot done';
+                document.getElementById('state-text').textContent = 'Pipeline complete';
+            }
+        }).catch(()=>{});
+    }
+
+    // ── Running average display ──────────────────────────────────────────
+    let _prevAvg = null;
+
+    // Populate window size label from config once loaded
+    fetch('/config').then(r => r.json()).then(cfg => {
+        const ws = cfg.processing.stateful_tasks.running_average_window_size;
+        document.getElementById('window-size').textContent = ws;
+    }).catch(()=>{});
+
+    function updateAvgDisplay(avg) {
+        if (avg === null || avg === undefined) return;
+
+        const display = document.getElementById('avg-display');
+        const arrow   = document.getElementById('avg-arrow');
+        const sub     = document.getElementById('avg-sub');
+
+        display.textContent = avg.toFixed(4);
+
+        if (_prevAvg !== null) {
+            const diff = avg - _prevAvg;
+            if (Math.abs(diff) < 0.0001) {
+                arrow.textContent = '='          	// steady
+                arrow.style.color = 'var(--muted)';
+            } else if (diff > 0) {
+                arrow.textContent = '\u2191';          // ↑ up
+                arrow.style.color = 'var(--green)';
+                sub.textContent   = '\u25b2 ' + diff.toFixed(4) + ' from last packet';
+                sub.style.color   = 'var(--green)';
+            } else {
+                arrow.textContent = '\u2193';          // ↓ down
+                arrow.style.color = 'var(--red)';
+                sub.textContent   = '\u25bc ' + Math.abs(diff).toFixed(4) + ' from last packet';
+                sub.style.color   = 'var(--red)';
+            }
+        }
+        _prevAvg = avg;
+    }
+
+    setInterval(pollCharts,       1000);
+    setInterval(pollBackpressure,  800);
+    setInterval(pollStatus,       1500);
+    _packetTimer = setInterval(pollPacket, 800);
+</script>
+</body>
+</html>
