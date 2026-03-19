@@ -1,5 +1,5 @@
 @startuml class_diagram
-title SDA Pipeline — Class Diagram
+title SDA Pipeline Class Diagram
 
 skinparam classAttributeIconSize 0
 skinparam classFontStyle Bold
