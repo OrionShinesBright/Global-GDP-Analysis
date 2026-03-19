@@ -1,0 +1,162 @@
+@startuml class_diagram
+title SDA Pipeline Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam classFontStyle Bold
+skinparam groupInheritance 2
+
+' ─────────────────────────────────────────────
+' PROTOCOLS  (Interfaces / structural types)
+' ─────────────────────────────────────────────
+package "core" {
+
+    interface ToStream <<Protocol>> {
+        + SendToStream(raw_data: List[Any]) : None
+    }
+
+    interface FromStream <<Protocol>> {
+        + PickFromStream() : List[Any]
+    }
+
+    class TransformationEngine {
+        - config : Dict
+        - service : FromStream
+        - service2 : ToStream
+        --
+        + execute() : None
+        - fix_fieldnames(config, row) : Dict
+        - verify_security_hash(config, row) : bool
+    }
+
+    class Aggregator {
+        - config : Dict
+        - service : FromStream
+        - service2 : ToStream
+        - window_size : int
+        - No_of_cores : int
+        - termination_count : int
+        - window : List[float]
+        --
+        + run() : None
+    }
+
+    note "functional core (module-level)\ncompute_running_average(\n  window, new_value, window_size\n) : Tuple[List, float]" as FuncCore
+    Aggregator .. FuncCore
+}
+
+' ─────────────────────────────────────────────
+' STREAM
+' ─────────────────────────────────────────────
+package "stream" {
+    class QueueImplementation {
+        - DataStream : Queue
+        - maxSize : int
+        --
+        + SendToStream(raw_data: List[Any]) : None
+        + PickFromStream() : List[Any]
+        + get_size() : int
+        + get_MaxSize() : int
+    }
+}
+
+' ─────────────────────────────────────────────
+' INPUT PLUGIN
+' ─────────────────────────────────────────────
+package "plugins.input" {
+    class InputManager {
+        - config : Dict
+        - service : ToStream
+        --
+        + run() : None
+        - _stream_csv(filepath: str) : None
+        - _stream_json(filepath: str) : None
+    }
+}
+
+' ─────────────────────────────────────────────
+' OUTPUT PLUGIN
+' ─────────────────────────────────────────────
+package "plugins.output" {
+
+    class OutputManager {
+        - config : Dict
+        - service : FromStream
+        - sink : ConsoleWriter
+        - chart : ChartWriter
+        - stream_map : dict
+        - count : int
+        --
+        + _choose_sink() : None
+    }
+
+    class ConsoleWriter {
+        + write(data1: Dict, data2: float, count: int) : None
+    }
+
+    class ChartWriter {
+        - charts : Dict
+        --
+        + render(title, x_label, y_label, x_axis, y_axis) : None
+        + finalize() : None
+    }
+
+    class PipelineMonitor {
+        - queues : Dict
+        - max_size : int
+        - poll_interval : float
+        - process : Process
+        - bars : Dict
+        - figure : Figure
+        --
+        + start() : None
+        + stop() : None
+        + update(snapshot: Dict) : None
+        - _run_monitor() : None
+        - _setup_plot() : None
+        - _color(pct: float) : str
+    }
+
+    class PipelineTelemetry {
+        - queues : Dict
+        - max_size : int
+        - poll_interval : float
+        - _observers : List
+        --
+        + subscribe(observer) : None
+        + run() : None
+        - _notify(snapshot: Dict) : None
+    }
+
+    note "module-level helpers\nSetup_line_plot()\nUpdate_line_plot()\nFinal_line_plot()\nregister_queues()" as ChartImpl
+    ChartWriter ..> ChartImpl : uses
+}
+
+' ─────────────────────────────────────────────
+' RELATIONSHIPS
+' ─────────────────────────────────────────────
+
+' QueueImplementation satisfies both protocols
+QueueImplementation ..|> ToStream   : implements
+QueueImplementation ..|> FromStream : implements
+
+' InputManager uses ToStream
+InputManager --> ToStream : writes to
+
+' TransformationEngine depends on protocols
+TransformationEngine --> FromStream : reads from
+TransformationEngine --> ToStream   : writes to
+
+' Aggregator depends on protocols
+Aggregator --> FromStream : reads from
+Aggregator --> ToStream   : writes to
+
+' OutputManager depends on FromStream
+OutputManager --> FromStream    : reads from
+OutputManager *-- ConsoleWriter : owns
+OutputManager *-- ChartWriter   : owns
+
+' Observer pattern
+PipelineMonitor --> PipelineTelemetry : subscribes to
+PipelineTelemetry --> PipelineMonitor : notifies (update)
+
+@enduml
