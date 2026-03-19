@@ -1,12 +1,12 @@
-# Global GDP Analysis
+# Real Time, Concurrent, Generic Data Pipeline
 
-A simple python dataset visualizer and analyzer that uses the World Bank GDP report dataset.
+A simple python dataset visualizer and analyzer that uses any generic dataset and virtualizes threads to get new cores to process the data.
 
 ---
 
 ## Rationale
 
-Made for our SDA semester project, the major purpose of this project is to showcase strong functional programming concepts, and clean architecture. The program is modular, and configuration based. Showcasing the power and succinctness of the Functional Programming Paradigm. Documentation is a key aspect of the codebase.
+Made for our SDA semester project, the major purpose of this project is to showcase strong functional programming concepts, and clean architecture. The program is modular, concurrent, pipelined, and configuration based. Showcasing the power and succinctness of the Functional Programming Paradigm. Documentation is a key aspect of the codebase.
 
 ---
 
@@ -22,29 +22,42 @@ Made for our SDA semester project, the major purpose of this project is to showc
 ## Project Structure
 ```bash
 Global-GDP-Analysis/
-├── README.md
 ├── config.json
 ├── core/
-│   ├── __init__.py
-│   ├── compute_operations.py
+│   ├── aggregator.py
 │   ├── data_processor.py
+│   ├── __init__.py
 │   └── protocols.py
 ├── data/
-│   ├── World_Bank_Dataset.csv
-│   └── gdp_with_continent_filled.json
+│   ├── gdp_with_continent_filled.json
+│   ├── unseen_climate_data.csv
+│   └── World_Bank_Dataset.csv
 ├── main.py
-└── plugins/
-    ├── input/
-    │   ├── __init__.py
-    │   └── data_loader.py
-    └── output/
-        ├── __init__.py
-        ├── chart_implementations.py
-        ├── chart_render.py
-        ├── console_writer.py
-        ├── dashboard.py
-        ├── prompt_handler.py
-        └── protocols.py
+├── plugins/
+│   ├── input/
+│   │   ├── data_loader.py
+│   │   └── __init__.py
+│   └── output/
+│       ├── chart_implementations.py
+│       ├── chart_writer.py
+│       ├── console_writer.py
+│       ├── __init__.py
+│       ├── pipeline_monitor.py
+│       ├── pipeline_telemetry.py
+│       ├── protocols.py
+│       └── web/
+│           ├── __init__.py
+│           ├── server.py
+│           ├── static/
+│           │   └── style.css
+│           └── templates/
+│               └── index.html
+├── README.md
+├── readme.txt
+├── requirements.txt
+└── stream/
+    ├── __init__.py
+    └── Stream.py
 ```
 
 ---
@@ -65,21 +78,18 @@ cd Global-GDP-Analysis/
 
 ```bash
 # For Archlinux
-sudo pacman -S --needed base-devel git python python-matplotlib python-pycountry
+sudo pacman -S --needed base-devel python python-pip
 
 # For Ubuntu
-sudo apt install -y python3-tk python3-matplotlib git curl python-is-python3 python3
+sudo apt install -y python3-tk python3-pip git curl python-is-python3 python3
 ```
 </details>
 
 <details>
-  <summary>Setup the V-Env</summary>
+  <summary>Get the Dependencies</summary>
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.bashrc
-uv venv
-uv pip install squarify wordcloud inquirerpy pycountry
+pip install -r requirements.txt --break-system-packages
 ```
 
 </details>
@@ -88,7 +98,7 @@ uv pip install squarify wordcloud inquirerpy pycountry
   <summary>Run the Dashboard</summary>
 
 ```bash
-uv run main.py
+python main.py
 ```
 
 </details>
@@ -100,8 +110,4 @@ uv run main.py
 We have made use of the following external tools, to improve the smoothness of our workflows:
 1. [ruff](https://github.com/astral-sh/ruff) (for formatting python code)
 2. [matplotlib](https://matplotlib.org/) (for visualization and plotting graphs)
-3. [squarify](https://github.com/laserson/squarify) (for visualization of `treemap` graph variant)
-4. [wordcloud](https://github.com/amueller/word_cloud) (for visualization of `wordcloud` graph variant)
-5. [InquirerPy](https://github.com/kazhala/InquirerPy) (for building the TUI used in dashboard prompt)
-6. [pycountry](https://github.com/pycountry/pycountry) (to identify between currently recognized countries of the world)
-7. [uv](https://github.com/astral-sh/uv.git) (to manage packages across different distributions of linux)
+3. [flask](https://flask.palletsprojects.com/en/stable/) (for serving the dashboard as web pages)
