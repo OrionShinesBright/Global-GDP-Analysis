@@ -79,6 +79,31 @@ def bootstrap():
         for key in list(map_to_streams.keys()):
             if config["visualizations"]["telemetry"].get(key) == False:
                 del stream_map[map_to_streams[key]]
+        # get the monitor in running
+        queues = PipelineMonitor(
+                stream_map,
+                config.get("pipeline_dynamics").get("stream_queue_max_size")
+        )
+
+    # 2. MODULE WIRING
+
+        ############
+        # i. Input #
+        ############
+        reader = InputManager(config, RawDataStream)
+        
+        ############
+        # ii. Core #
+        ############
+
+        # Engines (Workers)
+        core_engines = []
+        for i in range(config.get("pipeline_dynamics").get("core_parallelism")):
+            engine = TransformationEngine(config, RawDataStream, IntermediateStream)
+            core_engines.append(engine)
+
+        # Aggregator (imperitive shell)
+        aggregator = Aggregator(config, IntermediateStream, ProcessedDataStream)
 
 
         import traceback
